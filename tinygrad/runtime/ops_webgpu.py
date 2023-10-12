@@ -10,11 +10,11 @@ from tinygrad.renderer.wgsl import WGSLLanguage
 import wgpu  # type: ignore
 
 wgpu_device = get_default_device()
-
+opts = LinearizerOptions(supports_float4=False, local_max=[256, 256, 64], global_max=[65535, 65535, 65535], max_buffers=8)
 class WebGPUProgram:
   def __init__(self, name: str, prg: str, binary=False): self.name,self.prg = name,wgpu_device.create_shader_module(code=prg)
   def __call__(self, global_size, local_size, *bufs, wait=False):
-    assert len(bufs) <= 8, "WEBGPU only supports 8 buffers"
+    assert len(bufs) <= opts.max_buffers, f"WEBGPU only supports {opts.max_buffers} buffers"
     binding_layouts = [{"binding": i, "visibility": wgpu.ShaderStage.COMPUTE, "buffer": {"type": wgpu.BufferBindingType.storage}} for i in range(len(bufs))]
     bindings = [{"binding": i, "resource": {"buffer": x._buf, "offset": 0, "size": x._buf.size}} for i, x in enumerate(bufs)]
     bind_group_layout = wgpu_device.create_bind_group_layout(entries=binding_layouts)
@@ -42,4 +42,4 @@ class RawWebGPUBuffer(RawBufferCopyIn):
   def toCPU(self) -> np.ndarray: return np.frombuffer(wgpu_device.queue.read_buffer(self._buf, 0), dtype=np.dtype(self.dtype.np, metadata={"backing": self})) # type: ignore
 
 renderer = functools.partial(uops_to_cstyle, WGSLLanguage())
-WebGpuBuffer = Compiled(RawWebGPUBuffer, LinearizerOptions(supports_float4=False, local_max=[256, 256, 64], global_max=[65535, 65535, 65535]), renderer, WebGPUProgram)
+WebGpuBuffer = Compiled(RawWebGPUBuffer, opts, renderer, WebGPUProgram)

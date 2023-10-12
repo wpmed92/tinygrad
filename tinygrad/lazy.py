@@ -8,6 +8,7 @@ from tinygrad.helpers import prod, getenv, DType, dtypes, flatten, dedup, merge_
 from tinygrad.ops import ScheduleItem, UnaryOps, BinaryOps, TernaryOps, ReduceOps, MovementOps, LoadOps, OpType, LazyOp, MemBuffer, ConstBuffer, BufferOps
 from tinygrad.shape.shapetracker import ShapeTracker, get_contraction
 from tinygrad.shape.symbolic import Variable, sint
+from tinygrad.ops import Device
 
 from tinygrad.runtime.lib import RawBuffer
 from tinygrad.runtime.ops_cpu import RawNumpyBuffer
@@ -201,7 +202,6 @@ class LazyBuffer:
     return LazyBuffer("CPU", ShapeTracker.from_shape(x.shape), LoadOps, None, dtypes.from_np(x.dtype), RawNumpyBuffer.fromCPU(x))
 
   # *** elementwise ops ***
-
   def e(self:LazyBuffer, op:Union[UnaryOps, BinaryOps, TernaryOps], *srcs:LazyBuffer, arg:Optional[Any]=None) -> LazyBuffer:
     # srcs includes self
     srcs = (self,)+srcs
@@ -225,8 +225,9 @@ class LazyBuffer:
 
     if MERGE_ELEMENTWISE_OPS:
       # remove the buffers from any (childless) BinaryOps that feed into this
-      srcs = tuple([x.op if x.optype == BinaryOps and not x.children and not x.realized else x for x in srcs])  # type: ignore
-
+      _srcs = tuple([x.op if x.optype == BinaryOps and not x.children and not x.realized else x for x in srcs])  # type: ignore
+      if len([x.base for _src in _srcs for x in _src.buffers if not x.is_unrealized_const()]) < Device[Device.DEFAULT].linearizer_opts.max_buffers-1: srcs = _srcs
+      
     return create_lazybuffer(out_device, ShapeTracker.from_shape(out_shape), BinaryOps, LazyOp(op, srcs, arg), out_dtype)
 
   # *** reduce ops ***

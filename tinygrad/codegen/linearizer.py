@@ -152,7 +152,7 @@ class Linearizer(OptimizedKernel):
 
     # limit dims if we need to
     # TODO: broken, and doesn't really belong here
-    #if self.opts.global_max and self.opts.local_max: self.limit_dims_to_max(self.opts.global_max, self.opts.local_max)
+    if self.opts.global_max and self.opts.local_max: self.limit_dims_to_max(self.opts.global_max, self.opts.local_max)
 
     # uops
     self.uops: List[UOp] = []
