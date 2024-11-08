@@ -136,7 +136,6 @@ class Ops(FastEnum):
   LOAD = auto()
 
   # math ops
-  PLACEHOLDER = auto()
   WMMA = auto()
 
   # BinaryOps
