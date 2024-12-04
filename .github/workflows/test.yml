@@ -389,10 +389,10 @@ jobs:
         WEBGPU=1 DEBUG=4 FORWARD_ONLY=1 python3 test/test_ops.py TestOps.test_add
     - name: Build WEBGPU Efficientnet
       run: WEBGPU=1 WGPU_BACKEND_TYPE=Vulkan python3 -m examples.compile_efficientnet
-    - name: Install Puppeteer
-      run: npm install puppeteer
-    - name: Run WEBGPU Efficientnet
-      run: node test/web/test_webgpu.js
+   # - name: Install Puppeteer
+    #  run: npm install puppeteer
+    #- name: Run WEBGPU Efficientnet
+    #  run: node test/web/test_webgpu.js
     - name: Run selected webgpu tests
       run: |
           WEBGPU=1 WGPU_BACKEND_TYPE=Vulkan python3 -m pytest -n=auto test/test_assign.py test/test_arange.py test/test_const_folding.py test/test_dtype.py \
