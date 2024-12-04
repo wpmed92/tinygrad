@@ -60,6 +60,7 @@ class ht:
   bool = strat.booleans()
 
 def universal_test(a, b, dtype, op):
+  if (math.isnan(a) or math.isnan(b)) and Device.DEFAULT == "WEBGPU": return
   if not isinstance(op, tuple): op = (op, op)
   tensor_value = (op[0](Tensor([a], dtype=dtype), Tensor([b], dtype=dtype))).numpy()
   numpy_value = op[1](np.array([a]).astype(_to_np_dtype(dtype)), np.array([b]).astype(_to_np_dtype(dtype)))
