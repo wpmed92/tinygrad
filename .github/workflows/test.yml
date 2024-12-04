@@ -372,7 +372,8 @@ jobs:
     - name: install x server
       run: |
         sudo apt-get -y install xvfb
-        sudo /usr/bin/Xvfb :0 -screen 0 4096x4096x24+32 &
+    - name: run x server
+      run: xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24'
     - name: Install llvmpipe and lavapipe for offscreen canvas
       run: |
         sudo apt-get update -y -qq
