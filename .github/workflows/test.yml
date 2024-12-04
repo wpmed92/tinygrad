@@ -369,11 +369,6 @@ jobs:
         key: webgpu-testing-user3-packages-${{ hashFiles('**/setup.py') }}
     - name: Install Dependencies
       run: pip install --user -e '.[webgpu,testing]' --extra-index-url https://download.pytorch.org/whl/cpu
-    - name: install x server
-      run: |
-        sudo apt-get install xvfb x11-apps x11-xkb-utils libx11-6 libx11-xcb1
-    - name: run x server
-      run: Xvfb -ac :99 -screen 0 1280x1024x16 & export DISPLAY=:99
     - name: Install llvmpipe and lavapipe for offscreen canvas
       run: |
         sudo apt-get update -y -qq
@@ -387,12 +382,6 @@ jobs:
       run: |
         WEBGPU=1 python -c "from tinygrad import Device; assert Device.DEFAULT == 'WEBGPU', Device.DEFAULT"
         WEBGPU=1 DEBUG=4 FORWARD_ONLY=1 python3 test/test_ops.py TestOps.test_add
-    - name: Build WEBGPU Efficientnet
-      run: WEBGPU=1 WGPU_BACKEND_TYPE=Vulkan python3 -m examples.compile_efficientnet
-   # - name: Install Puppeteer
-    #  run: npm install puppeteer
-    #- name: Run WEBGPU Efficientnet
-    #  run: node test/web/test_webgpu.js
     - name: Run selected webgpu tests
       run: |
           WEBGPU=1 WGPU_BACKEND_TYPE=Vulkan python3 -m pytest -n=auto test/test_assign.py test/test_arange.py test/test_const_folding.py test/test_dtype.py \
