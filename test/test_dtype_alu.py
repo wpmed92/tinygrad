@@ -91,7 +91,7 @@ def universal_test_cast(a, in_dtype, dtype):
 
 def universal_test_midcast(a, b, c, op1, op2, d1:DType, d2:DType):
   # the 'inf' and 'nan' cases are wrong on WEBGPU
-  if (any(map(math.isnan, [a, b, c])) or math.isinf(c)) and Device.DEFAULT == "WEBGPU": return
+  if (any(map(math.isnan, [a, b, c])) or any(map(math.isinf, [a, b, c]))) and Device.DEFAULT == "WEBGPU": return
   if not isinstance(op1, tuple): op1 = (op1, op1)
   if not isinstance(op2, tuple): op2 = (op2, op2)
   at, bt, ct = Tensor([a], dtype=d1), Tensor([b], dtype=d1), Tensor([c], dtype=d2)

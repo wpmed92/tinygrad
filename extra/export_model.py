@@ -191,6 +191,7 @@ export default {exported_name};
 """
 
 def export_model(model, target:str, *inputs, model_name: Optional[str] = None):
+  print(f"Inputs={inputs}")
   assert Device.DEFAULT in EXPORT_SUPPORTED_DEVICE, "only WEBGPU, CLANG, CUDA, GPU, METAL are supported"
   with Context(JIT=2): run,special_names = jit_model(model, *inputs)
   functions, statements, bufs, bufs_to_save = compile_net(run, special_names)

@@ -23,6 +23,8 @@ def get_kernel(renderer:Renderer, ast:UOp) -> Kernel:
       k = beam_search(kb, rawbufs, BEAM.value, bool(getenv("BEAM_ESTIMATE", 1)))
   if logkerns is not None: logkerns.writelines([f"{(k.ast, k.applied_opts)}\n"])
   if DEBUG >= 5: print((k.ast, k.applied_opts)) # print here to show final applied_opts for all kernels instead of just in beam_search
+  if renderer.global_max:
+    k.apply_size_limits(gmax=renderer.global_max, lmax=renderer.local_max)
   return k
 
 # **************** Runners ****************

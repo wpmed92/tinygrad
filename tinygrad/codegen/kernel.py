@@ -2,8 +2,9 @@ from __future__ import annotations
 import itertools, functools
 from dataclasses import dataclass
 from collections import defaultdict
-from typing import Optional, cast, Final, Callable, Sequence
+from typing import Optional, cast, Final, Callable, Sequence, Tuple
 from enum import Enum, auto
+import math
 
 from tinygrad.ops import GroupOp, KernelInfo, UOp, Ops, can_pad, print_uops, type_verify, resolve, Variable, sint, \
   graph_rewrite, track_rewrites, view_left
@@ -443,6 +444,23 @@ class Kernel:
       assert unit_stride_axes_mul_4, f"needs a unit stride axis in {self.bufs[0]}"
       if all(x < self.first_upcast for x in unit_stride_axes_mul_4): self.apply_opt(Opt(OptOps.UPCAST, unit_stride_axes_mul_4[0], 4))
     return self
+  
+  def apply_size_limits(self, gmax:Tuple[int], lmax:Tuple[int]):
+    # reshapes dims (if possible) so that each element is less then, or equal to the coresponding element in max
+    def to_max(dims:Tuple[int], max:Tuple[int]) -> Tuple[int]:
+      if len(dims) == 0 or len(dims) > len(max) or all(d <= m for d,m in zip(dims, max)): return dims
+      dims = list(dims) + [1]*(3-len(dims))
+      for i in range(len(dims)):
+        while dims[i] > max[i]:
+        # find a divisor
+          div = [x[0] for x in [(c, dims[i] % c) for c in [2, 3, 5, 7, int(math.sqrt(dims[i]))]] if x[1] == 0]
+          if len(div) == 0: return tuple(dims)
+          else: div = div[0]
+          dims[i], dims[i+1] = dims[i]//div, dims[i+1]*div
+      return tuple(dims)
+    gdim, ldim = self.global_dims, self.first_reduce+self.group_for_reduces
+    if gmax: self.reshape_and_permute(lambda x: to_max(x[:gdim], gmax) + x[gdim:], None)
+    if lmax: self.reshape_and_permute(lambda x: x[:gdim] + to_max(x[gdim:ldim], lmax) + x[ldim:], None)
 
   def hand_coded_optimizations(self) -> Kernel:
     self.required_optimizations()

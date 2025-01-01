@@ -259,7 +259,7 @@ if __name__ == "__main__":
 
   # start with random noise
   if args.seed is not None: Tensor.manual_seed(args.seed)
-  latent = Tensor.randn(1,4,64,64)
+  latent = Tensor.randn(1,4,64,64, dtype=dtypes.float)#.cast(dtype=dtypes.half)
 
   @TinyJit
   def run(model, *x): return model(*x).realize()
