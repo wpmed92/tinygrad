@@ -38,26 +38,30 @@ if __name__ == "__main__":
     name: str = ""
     input: List[Tensor] = []
     forward: Any = None
+    state_from: Any = None
+    prefix: str = ""
 
   sub_steps = [
-    Step(name = "textModel", input = [Tensor.randn(1, 77)], forward = model.cond_stage_model.transformer.text_model),
+    Step(name = "textModel", input = [Tensor.randn(1, 77)], forward = model.cond_stage_model.transformer.text_model, prefix="cond_stage_model.transformer.text_model."),
     Step(name = "diffusor", input = [Tensor.randn(1, 77, 768), Tensor.randn(1, 77, 768), Tensor.randn(1,4,64,64), Tensor.rand(1), Tensor.randn(1), Tensor.randn(1), Tensor.randn(1)], forward = model),
-    Step(name = "decoder", input = [Tensor.randn(1,4,64,64)], forward = model.decode)
+    Step(name = "decoder", input = [Tensor.randn(1,4,64,64)], forward = model.decode, state_from = model.first_stage_model, prefix="first_stage_model.")
   ]
 
   for step in sub_steps:
-    print(step.name)
     prg, inp_sizes, out_sizes, state = export_model(
       step.forward, 
       Device.DEFAULT.lower(), 
       *step.input, 
-      model_name=step.name
+      model_name=step.name,
+      state_from = step.state_from,
+      prefix = step.prefix
     )
 
     dirname = Path(__file__).parent
 
-    if (step.name == "diffusor"):
+    if step.name == "diffusor":
       safe_save(state, (dirname / "net.safetensors").as_posix())
+
     with open(dirname / f"net_{step.name}.js", "w") as program_file:
        program_file.write(prg)
 

@@ -16289,12 +16289,12 @@ const setupNet = async (device, safetensor) => {
     const output0 = createEmptyBuf(device, 65536);;
     const input6 = createEmptyBuf(device, 4);;
 
-    const gpuWriteBuffer0 = device.createBuffer({size:input5.size, usage: GPUBufferUsage.COPY_SRC | GPUBufferUsage.MAP_WRITE });
-    const gpuWriteBuffer1 = device.createBuffer({size:input4.size, usage: GPUBufferUsage.COPY_SRC | GPUBufferUsage.MAP_WRITE });
+    const gpuWriteBuffer0 = device.createBuffer({size:input0.size, usage: GPUBufferUsage.COPY_SRC | GPUBufferUsage.MAP_WRITE });
+    const gpuWriteBuffer1 = device.createBuffer({size:input1.size, usage: GPUBufferUsage.COPY_SRC | GPUBufferUsage.MAP_WRITE });
     const gpuWriteBuffer2 = device.createBuffer({size:input2.size, usage: GPUBufferUsage.COPY_SRC | GPUBufferUsage.MAP_WRITE });
     const gpuWriteBuffer3 = device.createBuffer({size:input3.size, usage: GPUBufferUsage.COPY_SRC | GPUBufferUsage.MAP_WRITE });
-    const gpuWriteBuffer4 = device.createBuffer({size:input0.size, usage: GPUBufferUsage.COPY_SRC | GPUBufferUsage.MAP_WRITE });
-    const gpuWriteBuffer5 = device.createBuffer({size:input1.size, usage: GPUBufferUsage.COPY_SRC | GPUBufferUsage.MAP_WRITE });
+    const gpuWriteBuffer4 = device.createBuffer({size:input4.size, usage: GPUBufferUsage.COPY_SRC | GPUBufferUsage.MAP_WRITE });
+    const gpuWriteBuffer5 = device.createBuffer({size:input5.size, usage: GPUBufferUsage.COPY_SRC | GPUBufferUsage.MAP_WRITE });
     const gpuWriteBuffer6 = device.createBuffer({size:input6.size, usage: GPUBufferUsage.COPY_SRC | GPUBufferUsage.MAP_WRITE });
 
     const gpuReadBuffer0 = device.createBuffer({size:output0.size, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
@@ -16314,16 +16314,16 @@ const setupNet = async (device, safetensor) => {
       });
   }))
 
-    return async (_input5,_input4,_input2,_input3,_input0,_input1,_input6) => {
+    return async (_input0,_input1,_input2,_input3,_input4,_input5,_input6) => {
         const commandEncoder = device.createCommandEncoder();
         await gpuWriteBuffer0.mapAsync(GPUMapMode.WRITE);
-        new Float32Array(gpuWriteBuffer0.getMappedRange()).set(_input5);
+        new Float32Array(gpuWriteBuffer0.getMappedRange()).set(_input0);
         gpuWriteBuffer0.unmap();
-        commandEncoder.copyBufferToBuffer(gpuWriteBuffer0, 0, input5, 0, gpuWriteBuffer0.size);
+        commandEncoder.copyBufferToBuffer(gpuWriteBuffer0, 0, input0, 0, gpuWriteBuffer0.size);
     await gpuWriteBuffer1.mapAsync(GPUMapMode.WRITE);
-        new Float32Array(gpuWriteBuffer1.getMappedRange()).set(_input4);
+        new Float32Array(gpuWriteBuffer1.getMappedRange()).set(_input1);
         gpuWriteBuffer1.unmap();
-        commandEncoder.copyBufferToBuffer(gpuWriteBuffer1, 0, input4, 0, gpuWriteBuffer1.size);
+        commandEncoder.copyBufferToBuffer(gpuWriteBuffer1, 0, input1, 0, gpuWriteBuffer1.size);
     await gpuWriteBuffer2.mapAsync(GPUMapMode.WRITE);
         new Float32Array(gpuWriteBuffer2.getMappedRange()).set(_input2);
         gpuWriteBuffer2.unmap();
@@ -16333,13 +16333,13 @@ const setupNet = async (device, safetensor) => {
         gpuWriteBuffer3.unmap();
         commandEncoder.copyBufferToBuffer(gpuWriteBuffer3, 0, input3, 0, gpuWriteBuffer3.size);
     await gpuWriteBuffer4.mapAsync(GPUMapMode.WRITE);
-        new Float32Array(gpuWriteBuffer4.getMappedRange()).set(_input0);
+        new Float32Array(gpuWriteBuffer4.getMappedRange()).set(_input4);
         gpuWriteBuffer4.unmap();
-        commandEncoder.copyBufferToBuffer(gpuWriteBuffer4, 0, input0, 0, gpuWriteBuffer4.size);
+        commandEncoder.copyBufferToBuffer(gpuWriteBuffer4, 0, input4, 0, gpuWriteBuffer4.size);
     await gpuWriteBuffer5.mapAsync(GPUMapMode.WRITE);
-        new Float32Array(gpuWriteBuffer5.getMappedRange()).set(_input1);
+        new Float32Array(gpuWriteBuffer5.getMappedRange()).set(_input5);
         gpuWriteBuffer5.unmap();
-        commandEncoder.copyBufferToBuffer(gpuWriteBuffer5, 0, input1, 0, gpuWriteBuffer5.size);
+        commandEncoder.copyBufferToBuffer(gpuWriteBuffer5, 0, input5, 0, gpuWriteBuffer5.size);
     await gpuWriteBuffer6.mapAsync(GPUMapMode.WRITE);
         new Float32Array(gpuWriteBuffer6.getMappedRange()).set(_input6);
         gpuWriteBuffer6.unmap();
@@ -17197,7 +17197,21 @@ const setupNet = async (device, safetensor) => {
         return [resultBuffer0];
     }
 }
-const load = async (device, weight_path) => { return await fetch(weight_path).then(x => x.arrayBuffer()).then(x => setupNet(device, new Uint8Array(x))); }
-return { load };
+const load = async (device, weight_path) => {
+  if (weight_path instanceof Uint8Array) {
+    // If weight_path is already a Uint8Array, use it directly
+    return setupNet(device, weight_path);
+  } else {
+    // Otherwise, fetch and process the data
+    return fetch(weight_path)
+      .then(response => response.arrayBuffer())
+      .then(buffer => setupNet(device, new Uint8Array(buffer)));
+  }
+};
+const getWeight = (safetensor, key) => {
+  let uint8Data = getTensorBuffer(safetensor, getTensorMetadata(safetensor)[key], key);
+  return new Float32Array(uint8Data.buffer, uint8Data.byteOffset, uint8Data.byteLength / Float32Array.BYTES_PER_ELEMENT);
+}
+return { load, getWeight };
 })();
 export default diffusor;

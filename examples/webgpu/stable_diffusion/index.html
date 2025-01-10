@@ -6,7 +6,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>tinygrad has WebGPU</title>
     <style>
-        /* General Reset */
         * {
             margin: 0;
             padding: 0;
@@ -174,10 +173,6 @@
         import decoder from "./net_decoder.js"
         window.decoder = decoder;
     </script>
-    <script type="module">
-        import yolov8 from "./net.js"
-        window.yolov8 = yolov8;
-    </script>
 </head>
 <body>
     <h1 id="wgpuError" style="display: none;">WebGPU is not supported in this browser</h1>
@@ -224,7 +219,31 @@
     <canvas id="canvas" width="512" height="512"></canvas>
 
 <script>
-    let f16decomp = null;
+    let netDiffusor = null;
+    let netDecoder = null;
+    let netTextModel = null;
+    const weightMemWasm = new WebAssembly.Memory({initial: 39200, maximum: 39200});
+    const weightMem = new Uint8Array(weightMemWasm.buffer);
+
+    async function downloadLargeBlob(url) {
+        const response = await fetch(url);
+
+        if (!response.body) {
+            throw new Error('ReadableStream not supported in this browser.');
+        }
+
+        const reader = response.body.getReader();
+        const chunks = [];
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            chunks.push(value); // Process or save chunks incrementally
+        }
+
+        const blob = new Blob(chunks);
+        console.log(blob); // Or save it using FileSaver.js
+    }
 
     function initDb() {
         return new Promise((resolve, reject) => {
@@ -334,7 +353,8 @@
             requiredLimits.maxBufferSize = maxBufferSizeInSDModel;
             
             return await adapter.requestDevice({
-                requiredLimits
+                requiredLimits: requiredLimits,
+                requiredFeatures: ["shader-f16"]
             });
         };
 
@@ -346,27 +366,38 @@
             return out;
         }
 
-        const getProgressDlForPart = async (part, progressCallback) => {
-            const response = await fetch(part);
-            const contentLength = response.headers.get('content-length');
-            const total = parseInt(contentLength, 10);
+        async function downloadAndProcessFile(url) {
+            try {
+                const response = await fetch(url);
 
-            const res = new Response(new ReadableStream({
-                async start(controller) {
-                    const reader = response.body.getReader();
-                    for (;;) {
-                        const { done, value } = await reader.read();
-                        if (done) break;
-                        progressCallback(part, value.byteLength, total);
-                        controller.enqueue(value);
+                if (!response.ok) {
+                throw new Error(`Failed to fetch: ${response.statusText}`);
+                }
+
+                const reader = response.body.getReader();
+                let receivedLength = 0; // Keep track of how much data has been received
+                const chunks = []; // Optional: Store chunks if needed
+
+                while (true) {
+                    const { done, value } = await reader.read(); // Read the next chunk
+
+                    if (done) {
+                        console.log("File fully downloaded");
+                        break;
                     }
-                    
-                    controller.close();
-                },
-            }));
-        
-            return res.arrayBuffer();
-        };
+
+                    weightMem.set(value, receivedLength);
+
+                    receivedLength += value.length;
+                    console.log(`Received chunk of ${value.length} bytes. Total: ${receivedLength} bytes`);
+                }
+
+                console.log("File processing completed.");
+            } catch (error) {
+                console.error("Error while downloading or processing the file:", error);
+            }
+        }
+    
 
         const loadNet = async () => {
             const modelDlTitle = document.getElementById("modelDlTitle");
@@ -377,18 +408,19 @@
             }
 
             const device = await getDevice();
-            f16decomp =  await f16tof32().setup(device, safetensorParts),
-            safetensorParts = await getAndDecompressF16Safetensors(device, progress);
+            let weights = null;
+            
+            try {
+                weights = await downloadAndProcessFile("./net.safetensors");
+            } catch (ex) {
+                console.log(ex);
+            }
+
+            netDecoder   = await decoder.load(device, weightMem);
+            netDiffusor  = await diffusor.load(device, weightMem);
+            netTextModel = await textModel.load(device, weightMem);
 
             modelDlTitle.innerHTML = "Compiling model"
-
-            let models = ["textModel", "diffusor", "decoder"];
-
-            nets = await timer(() => Promise.all([
-                textModel().setup(device, safetensorParts),
-                diffusor().setup(device, safetensorParts),
-                decoder().setup(device, safetensorParts)
-            ]).then((loadedModels) => loadedModels.reduce((acc, model, index) => { acc[models[index]] = model; return acc; }, {})), "(compilation)")
 
             progress(1, 1);
 
@@ -403,8 +435,8 @@
 
         function runStableDiffusion(prompt, steps, guidance, showStep) {
             return new Promise(async (resolve, reject) => {
-                let context = await timer(() => nets["textModel"](clipTokenizer.encodeForCLIP(prompt)));
-                let unconditional_context = await timer(() => nets["textModel"](clipTokenizer.encodeForCLIP("")));
+                let context = (await netTextModel(clipTokenizer.encodeForCLIP(prompt)))[0];
+                let unconditional_context = (await netTextModel(clipTokenizer.encodeForCLIP("")))[0];
 
                 let timesteps = [];
 
@@ -414,12 +446,14 @@
 
                 console.log("Timesteps: " + timesteps);
 
-                let alphasCumprod = getWeight(safetensorParts,"alphas_cumprod");
+                let alphasCumprod = diffusor.getWeight(weightMem, "alphas_cumprod");
                 let alphas = [];
 
                 for (t of timesteps) {
                     alphas.push(alphasCumprod[Math.floor(t)]);
                 }
+
+                console.log(alphas);
 
                 alphas_prev = [1.0];
 
@@ -437,20 +471,20 @@
                 for (let i = timesteps.length - 1; i >= 0; i--) {
                     let timestep = new Float32Array([timesteps[i]]);
                     let start = performance.now()
-                    let x_prev = await nets["diffusor"](unconditional_context, context, latent, timestep, new Float32Array([alphas[i]]), new Float32Array([alphas_prev[i]]), new Float32Array([guidance]));
+                    let x_prev = (await netDiffusor(unconditional_context, context, latent, timestep, new Float32Array([alphas[i]]), new Float32Array([alphas_prev[i]]), new Float32Array([guidance])))[0];
                     document.getElementById("divStepTime").style.display = "block";
                     document.getElementById("stepTimeValue").innerText = `${(performance.now() - start).toFixed(1)} ms / step`
                     latent = x_prev;
 
                     if (showStep != null) {
-                        showStep(await nets["decoder"](latent));
+                        showStep((await netDecoder(latent))[0]);
                     }
 
                     document.getElementById("progressBar").value = ((steps - i) / steps) * 100
                     document.getElementById("progressFraction").innerHTML = (steps - i) + "/" + steps
                 }
                 
-                resolve(await timer(() => nets["decoder"](latent)));
+                resolve((await netDecoder(latent))[0]);
             });
         }
 
@@ -484,7 +518,7 @@
                 document.getElementById("stepRange").value,
                 document.getElementById("guidanceRange").value,
                 // Decode at each step
-                null
+                null//(image) => renderImage(image)
             ).then((image) => {
                 renderImage(image);
             }).finally(() => {

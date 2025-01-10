@@ -82,6 +82,8 @@ def export_model_webgpu(functions, statements, bufs, weight_names, input_names, 
     for _, (_, args, _, _) in enumerate(statements)
   ])
   layouts = f"const layouts=[{create_bind_group_layouts}]"
+  input_names.sort()
+  output_names.sort()
   kernel_calls = '\n        '.join([f"addComputePass(device, commandEncoder, pipelines[{i}], layouts[{i}], infinityBuf, [{', '.join(args)}], {global_size});" for i, (_name, args, global_size, _local_size) in enumerate(statements) ])
   _bufs =  '\n    '.join([f"const {name} = " + (f"createEmptyBuf(device, {size});" if _key not in weight_names else f"createWeightBuf(device, {size}, getTensorBuffer(safetensor, metadata['{weight_names[_key]}']))") + ";"  for name,(size,dtype,_key) in bufs.items()])
   gpu_write_bufs =  '\n    '.join([f"const gpuWriteBuffer{i} = device.createBuffer({{size:{input_name}.size, usage: GPUBufferUsage.COPY_SRC | GPUBufferUsage.MAP_WRITE }});" for i,input_name in enumerate(input_names)])
@@ -184,18 +186,31 @@ const setupNet = async (device, safetensor) => {{
         return {output_return};
     }}
 }}
-const load = async (device, weight_path) => {{ return await fetch(weight_path).then(x => x.arrayBuffer()).then(x => setupNet(device, new Uint8Array(x))); }}
+const load = async (device, weight_path) => {{
+  if (weight_path instanceof Uint8Array) {{
+    // If weight_path is already a Uint8Array, use it directly
+    return setupNet(device, weight_path);
+  }} else {{
+    // Otherwise, fetch and process the data
+    return fetch(weight_path)
+      .then(response => response.arrayBuffer())
+      .then(buffer => setupNet(device, new Uint8Array(buffer)));
+  }}
+}};
+const getWeight = (safetensor, key) => {{
+  let uint8Data = getTensorBuffer(safetensor, getTensorMetadata(safetensor)[key], key);
+  return new Float32Array(uint8Data.buffer, uint8Data.byteOffset, uint8Data.byteLength / Float32Array.BYTES_PER_ELEMENT);
+}}
 return {{ load }};
 }})();
 export default {exported_name};
 """
 
-def export_model(model, target:str, *inputs, model_name: Optional[str] = None):
-  print(f"Inputs={inputs}")
+def export_model(model, target:str, *inputs, model_name: Optional[str] = None, prefix: Optional[str] = "", state_from: Optional[str] = None):
   assert Device.DEFAULT in EXPORT_SUPPORTED_DEVICE, "only WEBGPU, CLANG, CUDA, GPU, METAL are supported"
   with Context(JIT=2): run,special_names = jit_model(model, *inputs)
   functions, statements, bufs, bufs_to_save = compile_net(run, special_names)
-  state = get_state_dict(model)
+  state = get_state_dict(model if not state_from else state_from, prefix)
   weight_names = {id(x.lazydata.base.realized): name for name, x in state.items()}
   input_names = [name for _,name in special_names.items() if "input" in name]
   output_names = [name for _,name in special_names.items() if "output" in name]
