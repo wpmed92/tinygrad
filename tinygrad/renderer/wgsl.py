@@ -2,6 +2,7 @@ from tinygrad.dtype import DType, PtrDType, dtypes, AddrSpace
 from tinygrad.uop.ops import UOp, Ops, PatternMatcher, UPat
 from tinygrad.renderer.cstyle import CStyleLanguage, base_rewrite, extra_pm
 from tinygrad.helpers import strip_parens
+from tinygrad.codegen.opt import tc
 
 def sign_extend(val:UOp, sext_am:int):
   return (UOp.where((val >> (sext_am - 1)) > 0, UOp.const(dtypes.uint32, 0xffffffff) << sext_am, UOp.const(dtypes.uint32, 0)) \
@@ -56,6 +57,7 @@ class WGSLRenderer(CStyleLanguage):
   nan = "nan()"
   type_map = { dtypes.float: "f32", dtypes.uchar: "u32", dtypes.ushort: "u32", dtypes.short: "i32",
               dtypes.char: "i32", dtypes.int32: "i32", dtypes.uint32: "u32", dtypes.bool: "bool", dtypes.half: "f16" }
+  def __init__(self): self.tensor_cores = tc.webgpu
 
   string_rewrite = PatternMatcher([
     (UPat.cvar("x", dtype=dtypes.bool), lambda x: "true" if x.arg else "false"),

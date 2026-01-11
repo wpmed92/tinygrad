@@ -140,6 +140,12 @@ metal = [TensorCore(dims=(8,8,8), threads=32, elements_per_thread=(2,2,2), dtype
   for di,do in [(dtypes.float,dtypes.float),(dtypes.half,dtypes.float),
                 (dtypes.half,dtypes.half),(dtypes.bfloat16,dtypes.float),(dtypes.bfloat16,dtypes.bfloat16)]]
 
+# ***** WebGPU subgroup matrix *****
+webgpu = [TensorCore(dims=(8,8,8), threads=32, elements_per_thread=(2,2,2), dtype_in=di, dtype_out=do,
+  opts=("u0","l0","l1","l1","l0","l1"),
+  swizzle=((('r1', 'l1', 'l2', 'r2', 'l4'), ('r0',), ('u0', 'l0', 'l3')),
+           (('l0', 'r0', 'r1', 'l3', 'r2'), ('u0',), ('l1', 'l2', 'l4'))))
+  for di,do in [(dtypes.float,dtypes.float),(dtypes.half,dtypes.float)]]
 # ***** Apple AMX *****
 
 amx = [TensorCore(dims=(sz,sz,1), threads=1, elements_per_thread=(sz,sz,sz*sz), dtype_in=dt, dtype_out=dt,
